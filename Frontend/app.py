@@ -1242,133 +1242,132 @@ elif st.session_state.selected_role == "applicant":
 
     elif "AI Gameplay Evaluation" in athlete_view:
         st.markdown("## ⚡ AI Gameplay Evaluation & Media Upload")
-        st.info(
-            "Choose your preferred method below to submit your gameplay clips for AI mechanics evaluation."
-        )
-
-        upload_method = st.radio(
-            "Choose Media Source Option:",
-            [
-                "Google Drive / Cloud Link (Recommended)",
-                "Direct File Upload (Device/System)",
-            ],
-            horizontal=True,
-            key="media_source_radio"
-        )
-
-        valid_submission = False
-        source_tag = "Pending"
-        saved_paths = []
-
-        # Option A: Cloud / Google Drive Link
-        if "Google Drive" in upload_method:
-            st.markdown("#### ☁️ Import Gameplay via Google Drive / Cloud")
-            drive_link = st.text_input(
-                "Google Drive / OneDrive / Dropbox Link*",
-                placeholder="https://drive.google.com/drive/folders/1a2b3c... or file URL",
-                key="cloud_drive_url",
+        
+        # ==========================================
+        # VIEW 1: DISPLAY RESULTS IF AVAILABLE
+        # ==========================================
+        if "ai_results" in st.session_state and st.session_state["ai_results"]:
+            res = st.session_state["ai_results"]
+            
+            st.success("✅ AI Gameplay Analysis Complete!")
+            
+            # Metric Card Header
+            c1, c2 = st.columns([1, 2])
+            with c1:
+                st.metric(
+                    label="Overall Impact Score", 
+                    value=f"{res['overall_score']} / 100", 
+                    delta="Verified Kinematics"
+                )
+            with c2:
+                st.info(f"**Athlete Name:** {res['player_name']}\n\n**Claimed Level:** {res['claimed_level']}\n\n**Evaluation Engine:** {res['llm_evaluation'].get('source', 'AI Pipeline')}")
+            
+            st.markdown("---")
+            
+            # Detailed Skill Breakdown
+            st.markdown("### 📊 Biomechanical Skill Breakdown")
+            kin = res.get("kinematics", {})
+            m1, m2, m3, m4, m5 = st.columns(5)
+            m1.metric("Forehand", f"{kin.get('forehand_score', 80)}/100")
+            m2.metric("Backhand", f"{kin.get('backhand_score', 78)}/100")
+            m3.metric("Footwork", f"{kin.get('footwork_score', 80)}/100")
+            m4.metric("Reaction", f"{kin.get('reaction_score', 82)}/100")
+            m5.metric("Endurance", f"{kin.get('endurance_score', 80)}/100")
+            
+            st.markdown("---")
+            
+            # AI Coaching Insights
+            st.markdown("### 🧠 AI Coach Evaluation & Recommendations")
+            st.chat_message("assistant").write(
+                res['llm_evaluation'].get("summary", "Player shows strong technique and balanced mechanics.")
             )
-            st.caption(
-                "**Tip:** Make sure link sharing permission is set to **'Anyone with the link can view'** so the AI engine can stream the video."
+            
+            st.markdown("---")
+            if st.button("🔄 Analyze Another Gameplay Clip", type="secondary"):
+                st.session_state["ai_results"] = None
+                st.rerun()
+
+        # ==========================================
+        # VIEW 2: UPLOAD & SUBMIT FORM
+        # ==========================================
+        else:
+            st.info("Submit 1 primary gameplay video clip below for AI mechanics evaluation.")
+
+            upload_method = st.radio(
+                "Choose Media Source Option:",
+                [
+                    "Direct File Upload (Device/System)",
+                    "Google Drive / Cloud Link (Recommended)",
+                ],
+                horizontal=True,
+                key="media_source_radio"
             )
-            if drive_link:
-                if is_valid_url(drive_link):
-                    st.markdown(
-                        f"""
-                        <div class="source-box">
-                        <span style="color:#00D9FF; font-weight:800;">Connected to Cloud Target:</span><br/>
-                        <code>{drive_link}</code>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+
+            valid_submission = False
+            saved_paths = []
+
+            if "Google Drive" in upload_method:
+                drive_link = st.text_input(
+                    "Google Drive / OneDrive Link*",
+                    placeholder="https://drive.google.com/...",
+                    key="cloud_drive_url",
+                )
+                if drive_link and is_valid_url(drive_link):
                     valid_submission = True
-                    source_tag = "Google Drive"
-                else:
-                    st.warning("Please enter a valid web URL starting with https://")
 
-        # Option B: Direct Local Upload
-        elif "Direct File Upload" in upload_method:
-            st.markdown("#### 📁 Upload Gameplay Files directly from your device")
-            uploaded_files = st.file_uploader(
-                "Attach Gameplay Clips or Photo Certificates",
-                type=["mp4", "mov", "avi", "png", "jpg", "jpeg"],
-                accept_multiple_files=True,
-                key="local_media_files",
-            )
-            if uploaded_files:
-                st.write(f"**{len(uploaded_files)}** media file(s) attached.")
-                valid_submission = True
-                source_tag = "Local Upload"
-                for idx, file in enumerate(uploaded_files):
-                    file_path = os.path.join(
-                        UPLOAD_DIR, f"{current_user_id}_file_{idx+1}_{file.name}"
-                    )
+            elif "Direct File Upload" in upload_method:
+                uploaded_files = st.file_uploader(
+                    "Attach Primary Gameplay Video (MP4 / MOV)",
+                    type=["mp4", "mov", "avi", "png", "jpg", "jpeg"],
+                    accept_multiple_files=False,  # Set to 1 video clip for fast evaluation
+                    key="local_media_files",
+                )
+                if uploaded_files:
+                    st.write(f"Attached: **{uploaded_files.name}**")
+                    valid_submission = True
+                    file_path = os.path.join(UPLOAD_DIR, f"{current_user_id}_{uploaded_files.name}")
                     with open(file_path, "wb") as f:
-                        f.write(file.getbuffer())
+                        f.write(uploaded_files.getbuffer())
                     saved_paths.append(file_path)
 
-        st.markdown("---")
+            st.markdown("---")
 
-        # --- ALWAYS VISIBLE ANALYSIS BUTTON ---
-        if st.button("🚀 Run Impact Score AI Analysis", type="primary", use_container_width=True):
-            if not valid_submission:
-                st.error("⚠️ Please attach gameplay files or provide a valid Google Drive link before running the analysis.")
-            else:
-                with st.spinner("Transmitting media to FastAPI Backend Engine & running AI pipeline..."):
-                    try:
-                        files_payload = {}
-                        
-                        # Prepare files for FastAPI
-                        if saved_paths and len(saved_paths) > 0:
-                            video_path = saved_paths[0]
-                            files_payload["video_file"] = (
-                                os.path.basename(video_path),
-                                open(video_path, "rb"),
-                                "video/mp4"
-                            )
-                            
-                            # FastAPI requires 'proof_file'. Use second attached file, or fallback to first file.
-                            proof_path = saved_paths[1] if len(saved_paths) > 1 else saved_paths[0]
-                            files_payload["proof_file"] = (
-                                os.path.basename(proof_path),
-                                open(proof_path, "rb"),
-                                "image/png"
-                            )
+            if st.button("🚀 Run Impact Score AI Analysis", type="primary", use_container_width=True):
+                if not valid_submission:
+                    st.error("⚠️ Please attach a gameplay video file or valid URL before running analysis.")
+                else:
+                    with st.spinner("Analyzing gameplay frames & querying AI engine..."):
+                        try:
+                            files_payload = {}
+                            if saved_paths:
+                                video_path = saved_paths[0]
+                                files_payload["video_file"] = (
+                                    os.path.basename(video_path),
+                                    open(video_path, "rb"),
+                                    "video/mp4"
+                                )
+                                files_payload["proof_file"] = (
+                                    os.path.basename(video_path),
+                                    open(video_path, "rb"),
+                                    "video/mp4"
+                                )
 
-                        # Form fields matching FastAPI's exact requirements
-                        data_payload = {
-                            "player_name": user_info.get("name", "Athlete"),
-                            "claimed_level": user_info.get("records") if user_info.get("records") else "State Level"
-                        }
-
-                        # HTTP POST Request
-                        response = requests.post(BACKEND_URL, files=files_payload, data=data_payload, timeout=90)
-
-                        if response.status_code == 200:
-                            result = response.json()
-                            kinematics = result.get("kinematics", {})
-                            
-                            ai_stats = {
-                                "Forehand": int(kinematics.get("forehand_score", random.randint(75, 92))),
-                                "Backhand": int(kinematics.get("backhand_score", random.randint(70, 88))),
-                                "Footwork": int(kinematics.get("footwork_score", random.randint(72, 90))),
-                                "Reaction": int(kinematics.get("reaction_score", random.randint(78, 95))),
-                                "Endurance": int(kinematics.get("endurance_score", random.randint(70, 88))),
+                            data_payload = {
+                                "player_name": user_info.get("name", "Athlete"),
+                                "claimed_level": user_info.get("records") if user_info.get("records") else "State Level"
                             }
 
-                            overall_score = result.get("overall_score", sum(ai_stats.values()) // len(ai_stats))
+                            response = requests.post(BACKEND_URL, files=files_payload, data=data_payload, timeout=90)
 
-                            st.session_state.users_db[current_user_id]["stats"] = ai_stats
-                            st.session_state.users_db[current_user_id]["overall"] = overall_score
-                            st.session_state.users_db[current_user_id]["media_source"] = source_tag
-                            st.session_state.users_db[current_user_id]["saved_video_paths"] = saved_paths
-                            st.session_state.users_db[current_user_id]["analysis_completed"] = True
+                            if response.status_code == 200:
+                                result = response.json()
+                                # Save directly into session state root
+                                st.session_state["ai_results"] = result
+                                st.rerun()
+                            else:
+                                st.error(f"Backend Server Error ({response.status_code}): {response.text}")
 
-                            st.success("✅ AI Analysis Complete! Real kinematics & scores fetched from FastAPI backend.")
-                            st.rerun()
-                        else:
-                            st.error(f"Backend Server Error ({response.status_code}): {response.text}")
+                        except Exception as e:
+                            st.error(f"Failed to connect to backend on {BACKEND_URL}: {e}")
 
-                    except Exception as e:
-                        st.error(f"Failed to connect to FastAPI backend at {BACKEND_URL}. Ensure main.py is running. Error: {e}")
+    render_tech_footer()

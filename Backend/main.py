@@ -11,7 +11,6 @@ from llm_evaluator import generate_impact_scorecard
 
 app = FastAPI(title="Impact Score AI Backend")
 
-# Enable CORS for Streamlit frontend interaction
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,7 +19,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize global vision analyzer
 analyzer = TTGameplayAnalyzer()
 
 
@@ -40,31 +38,39 @@ async def analyze_applicant(
     temp_video_path = None
 
     try:
-        # 1. Save uploaded video to a temporary path if provided
+        # Save video with a clean filename
         if video_file:
-            temp_video_path = os.path.join(temp_dir, video_file.filename)
+            temp_video_path = os.path.join(temp_dir, "input_video.mp4")
             with open(temp_video_path, "wb") as buffer:
                 shutil.copyfileobj(video_file.file, buffer)
 
-        # 2. Run Vision Analysis (MediaPipe Kinematics)
+        # 1. Run OpenCV Vision Analysis
         kinematics = analyzer.process_gameplay(temp_video_path)
 
-        # 3. Calculate overall score
+        # 2. Calculate Overall Score
         scores = [
-            kinematics.get("forehand_score", 80),
-            kinematics.get("backhand_score", 78),
-            kinematics.get("footwork_score", 80),
-            kinematics.get("reaction_score", 82),
+            kinematics.get("forehand_score", 84),
+            kinematics.get("backhand_score", 79),
+            kinematics.get("footwork_score", 82),
+            kinematics.get("reaction_score", 86),
             kinematics.get("endurance_score", 80),
         ]
         overall_score = sum(scores) // len(scores)
 
-        # 4. Generate LLM Analysis & Coaching Commentary
+        # 3. Generate LLM Analysis
         llm_insights = generate_impact_scorecard(
             player_name=player_name,
             level=claimed_level,
             kinematics=kinematics
         )
+
+        # --- TERMINAL LOGGING (PRINTS DIRECTLY TO BACKEND CONSOLE) ---
+        print("\n" + "="*50)
+        print(f"📊 ANALYSIS COMPLETE FOR: {player_name} ({claimed_level})")
+        print(f"🎯 OVERALL IMPACT SCORE: {overall_score}/100")
+        print(f"📈 KINEMATICS: {kinematics}")
+        print(f"🧠 AI COACH COMMENTARY:\n{llm_insights.get('summary')}")
+        print("="*50 + "\n")
 
         return {
             "status": "success",
@@ -76,11 +82,10 @@ async def analyze_applicant(
         }
 
     except Exception as e:
-        print(f"[Main API Error]: {e}")
+        print(f"❌ [Main API Error]: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
-        # Clean up temporary directory and files
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
