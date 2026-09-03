@@ -1,97 +1,90 @@
-import sys
+# backend/main.py
 import os
-import uvicorn
 import shutil
-from fastapi import FastAPI, UploadFile, File, Form
+import tempfile
+from typing import Optional
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
-# Ensure the 'backend' folder is added to Python's module search path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from vision_engine import TTGameplayAnalyzer
+from llm_evaluator import generate_impact_scorecard
 
-app = FastAPI(title="Impact Score API")
+app = FastAPI(title="Impact Score AI Backend")
 
-os.makedirs("uploads", exist_ok=True)
+# Enable CORS for Streamlit frontend interaction
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Safe imports to prevent silent startup crashes
-try:
-    from vision_engine import TTGameplayAnalyzer
-    vision_analyzer = TTGameplayAnalyzer()
-    print("✅ Vision Engine Loaded")
-except Exception as e:
-    print(f"⚠️ Vision Engine Notice: {e}")
-    vision_analyzer = None
+# Initialize global vision analyzer
+analyzer = TTGameplayAnalyzer()
 
-try:
-    from proof_verifier import CertificateProofVerifier
-    proof_verifier = CertificateProofVerifier()
-    print("✅ Proof Verifier Loaded")
-except Exception as e:
-    print(f"⚠️ Proof Verifier Notice: {e}")
-    proof_verifier = None
-
-try:
-    from llm_evaluator import generate_impact_scorecard
-    print("✅ LLM Evaluator Ready")
-except Exception as e:
-    print(f"⚠️ LLM Evaluator Notice: {e}")
-    generate_impact_scorecard = None
 
 @app.get("/")
-def home():
-    return {"status": "Impact Score API is Online", "docs": "http://127.0.0.1:8001/docs"}
+def read_root():
+    return {"status": "online", "engine": "Impact Score FastAPI AI Pipeline"}
+
 
 @app.post("/analyze_applicant")
 async def analyze_applicant(
     player_name: str = Form(...),
-    claimed_level: str = Form(...),
-    video_file: UploadFile = File(...),
-    proof_file: UploadFile = File(...)
+    claimed_level: str = Form("State Level"),
+    video_file: Optional[UploadFile] = File(None),
+    proof_file: Optional[UploadFile] = File(None),
 ):
-    video_path = f"uploads/{video_file.filename}"
-    proof_path = f"uploads/{proof_file.filename}"
+    temp_dir = tempfile.mkdtemp()
+    temp_video_path = None
 
-    with open(video_path, "wb") as f:
-        shutil.copyfileobj(video_file.file, f)
-    with open(proof_path, "wb") as f:
-        shutil.copyfileobj(proof_file.file, f)
+    try:
+        # 1. Save uploaded video to a temporary path if provided
+        if video_file:
+            temp_video_path = os.path.join(temp_dir, video_file.filename)
+            with open(temp_video_path, "wb") as buffer:
+                shutil.copyfileobj(video_file.file, buffer)
 
-    if vision_analyzer:
-        try:
-            kinematics = vision_analyzer.process_gameplay(video_path)
-        except Exception as e:
-            print(f"Vision Processing Fallback Triggered: {e}")
-            kinematics = {"avg_elbow_angle": 118.5, "avg_knee_angle": 138.2, "stroke_consistency_pct": 82.0, "footwork_readiness_pct": 75.0, "tracking_stats": {"ball_tracked_frames": 45, "person_tracked_frames": 120}}
-    else:
-        kinematics = {"avg_elbow_angle": 118.5, "avg_knee_angle": 138.2, "stroke_consistency_pct": 82.0, "footwork_readiness_pct": 75.0, "tracking_stats": {"ball_tracked_frames": 45, "person_tracked_frames": 120}}
+        # 2. Run Vision Analysis (MediaPipe Kinematics)
+        kinematics = analyzer.process_gameplay(temp_video_path)
 
-    if proof_verifier:
-        try:
-            proof_res = proof_verifier.verify_proof(proof_path, claimed_level)
-        except Exception as e:
-            print(f"Proof Verifier Fallback Triggered: {e}")
-            proof_res = {"verified": True, "trust_score": 85, "claimed_level": claimed_level, "ocr_text_snippet": "Table Tennis Federation Certificate", "status": "VERIFIED_GENUINE"}
-    else:
-        proof_res = {"verified": True, "trust_score": 85, "claimed_level": claimed_level, "ocr_text_snippet": "Table Tennis Federation Certificate", "status": "VERIFIED_GENUINE"}
+        # 3. Calculate overall score
+        scores = [
+            kinematics.get("forehand_score", 80),
+            kinematics.get("backhand_score", 78),
+            kinematics.get("footwork_score", 80),
+            kinematics.get("reaction_score", 82),
+            kinematics.get("endurance_score", 80),
+        ]
+        overall_score = sum(scores) // len(scores)
 
-    if generate_impact_scorecard:
-        scorecard = generate_impact_scorecard(player_name, claimed_level, kinematics, proof_res)
-    else:
-        scorecard = {
-            "overall_score": 84,
-            "strengths": ["Consistent forehand loop flexion", "Verified state-level history"],
-            "weaknesses": ["Lower-body stance center of gravity needs lowering"],
-            "grant_priority": "HIGH",
-            "recommended_grant_inr": 100000,
-            "executive_summary": "High-potential candidate with verified credentials."
+        # 4. Generate LLM Analysis & Coaching Commentary
+        llm_insights = generate_impact_scorecard(
+            player_name=player_name,
+            level=claimed_level,
+            kinematics=kinematics
+        )
+
+        return {
+            "status": "success",
+            "player_name": player_name,
+            "claimed_level": claimed_level,
+            "overall_score": overall_score,
+            "kinematics": kinematics,
+            "llm_evaluation": llm_insights,
         }
 
-    return {
-        "player_name": player_name,
-        "claimed_level": claimed_level,
-        "proof_verification": proof_res,
-        "kinematics": kinematics,
-        "scorecard": scorecard
-    }
+    except Exception as e:
+        print(f"[Main API Error]: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "_main_":
-    print("Starting FastAPI Server on http://127.0.0.1:8001 ...")
-    uvicorn.run(app, host="127.0.0.1", port=8001)
+    finally:
+        # Clean up temporary directory and files
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=True)
