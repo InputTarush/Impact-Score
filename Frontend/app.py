@@ -1718,36 +1718,42 @@ elif st.session_state.selected_role == "applicant":
 
                             if response.status_code == 200:
                                 api_result = response.json()
-                                my_bar.progress(90, text="Generating Qwen LLM coaching commentary...")
-
                                 kinematics = api_result.get("kinematics", {})
-                                llm_eval = api_result.get("llm_evaluation", {})
 
-                                # Extract real metrics calculated by OpenCV
-                                ai_stats = {
-                                    "Forehand": kinematics.get("forehand_score", 80),
-                                    "Backhand": kinematics.get("backhand_score", 78),
-                                    "Footwork": kinematics.get("footwork_score", 80),
-                                    "Reaction": kinematics.get("reaction_score", 82),
-                                    "Endurance": kinematics.get("endurance_score", 80),
-                                }
-                                overall_score = api_result.get("overall_score", 80)
-                                llm_commentary = llm_eval.get("summary", "Analysis completed.")
+                                # 1. CHECK IF VISION ENGINE RETURNED A FALLBACK ERROR
+                                if kinematics.get("error"):
+                                    my_bar.empty()
+                                    st.error(
+                                        f"❌ **AI Evaluation Failed:** {kinematics.get('error_message', 'Could not analyze gameplay footage.')}\n\n"
+                                        "Please upload a clearer video with full body visibility."
+                                    )
+                                else:
+                                    # 2. PROCEED WITH VALID TELEMETRY
+                                    my_bar.progress(90, text="Generating Qwen LLM coaching commentary...")
+                                    llm_eval = api_result.get("llm_evaluation", {})
 
-                                # Update session state with genuine backend data
-                                st.session_state.users_db[current_user_id]["stats"] = ai_stats
-                                st.session_state.users_db[current_user_id]["overall"] = overall_score
-                                st.session_state.users_db[current_user_id]["media_source"] = source_tag
-                                st.session_state.users_db[current_user_id]["saved_video_paths"] = saved_paths
-                                st.session_state.users_db[current_user_id]["analysis_completed"] = True
-                                st.session_state.users_db[current_user_id]["ai_commentary"] = llm_commentary
-                                st.session_state.users_db[current_user_id]["kinematics"] = kinematics
+                                    ai_stats = {
+                                        "Forehand": kinematics.get("forehand_score", 0),
+                                        "Backhand": kinematics.get("backhand_score", 0),
+                                        "Footwork": kinematics.get("footwork_score", 0),
+                                        "Reaction": kinematics.get("reaction_score", 0),
+                                        "Endurance": kinematics.get("endurance_score", 0),
+                                    }
+                                    overall_score = api_result.get("overall_score", 0)
+                                    llm_commentary = llm_eval.get("summary", "Analysis completed.")
 
-                                my_bar.progress(100, text="Analysis Complete!")
-                                st.session_state.just_passed_video_eval = True
+                                    # Save valid data to session state
+                                    st.session_state.users_db[current_user_id]["stats"] = ai_stats
+                                    st.session_state.users_db[current_user_id]["overall"] = overall_score
+                                    st.session_state.users_db[current_user_id]["media_source"] = source_tag
+                                    st.session_state.users_db[current_user_id]["saved_video_paths"] = saved_paths
+                                    st.session_state.users_db[current_user_id]["analysis_completed"] = True
+                                    st.session_state.users_db[current_user_id]["ai_commentary"] = llm_commentary
+                                    st.session_state.users_db[current_user_id]["kinematics"] = kinematics
 
-                                st.balloons()
-                                st.rerun()
+                                    my_bar.progress(100, text="Analysis Complete!")
+                                    st.balloons()
+                                    st.rerun()
                             else:
                                 st.error(f"Backend API Error ({response.status_code}): {response.text}")
 

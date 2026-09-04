@@ -121,14 +121,20 @@ class TTGameplayAnalyzer:
             "endurance_score": endurance_score,
         }
 
-    def _get_fallback_scores(self) -> dict:
+    def _get_fallback_scores(self, error_msg: str = "Vision analysis failed or could not detect player pose.") -> dict:
+        """
+        Returns an explicit error payload when OpenCV vision processing fails.
+        """
         return {
-            "avg_elbow_angle": 118.5,
-            "avg_knee_angle": 138.2,
+            "error": True,
+            "error_message": error_msg,
+            "avg_elbow_angle": None,
+            "avg_knee_angle": None,
             "processed_frames": 0,
-            "forehand_score": 62,
-            "backhand_score": 58,
-            "footwork_score": 60,
-            "reaction_score": 64,
-            "endurance_score": 59,
+            "forehand_score": None,
+            "backhand_score": None,
+            "footwork_score": None,
+            "reaction_score": None,
+            "endurance_score": None,
         }
+        
