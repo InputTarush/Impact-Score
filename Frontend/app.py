@@ -379,6 +379,18 @@ def render_verified_talent_feed(user_role="csr"):
             </div>
             """)
 
+            # -----------------------------------------------------------------
+            # FULL OLLAMA COACHING & BIOMECHANICAL AUDIT SECTION
+            # -----------------------------------------------------------------
+            ai_commentary = player.get("ai_commentary", "No evaluation commentary available.")
+            kinematics = player.get("kinematics", {})
+
+            # Executive AI Commentary Callout
+            st.subheader("🧠 Complete AI Coaching & Biomechanical Assessment")
+            st.info(f"**Full Coaching Commentary (Ollama Qwen2.5 Engine):**\n\n{ai_commentary}", icon="📋")
+
+            st.markdown("---")
+
             col_det1, col_det2 = st.columns([1.1, 1.3], gap="large")
 
             with col_det1:
@@ -388,6 +400,37 @@ def render_verified_talent_feed(user_role="csr"):
                     st.plotly_chart(fig, use_container_width=True)
 
                 st.markdown("---")
+
+                # Deep Biomechanical Kinematics Metrics
+                st.subheader("📈 Vision Engine Kinematic Telemetry")
+                if kinematics:
+                    k_col1, k_col2 = st.columns(2)
+                    with k_col1:
+                        st.metric(
+                            label="Avg Elbow Angle", 
+                            value=f"{kinematics.get('avg_elbow_angle', 'N/A')}°",
+                            help="Optimal Range: 115° - 125°"
+                        )
+                    with k_col2:
+                        st.metric(
+                            label="Avg Knee Flex", 
+                            value=f"{kinematics.get('avg_knee_angle', 'N/A')}°",
+                            help="Optimal Range: 130° - 142°"
+                        )
+                    st.metric(
+                        label="OpenCV Motion Frames Analyzed", 
+                        value=f"{kinematics.get('processed_frames', 0)} frames"
+                    )
+
+                with st.expander("🔍 View Raw Vision Engine JSON Telemetry"):
+                    st.json(kinematics)
+
+            with col_det2:
+                st.subheader(f"📹 {player['name']}'s Video Library ({len(vids)} Clips)")
+                render_video_library_player(vids)
+
+                st.markdown("---")
+
                 st.subheader("🤝 Grant Funding Allocation")
                 selected_grant = st.selectbox(
                     "Funding Tier",
@@ -402,13 +445,9 @@ def render_verified_talent_feed(user_role="csr"):
                     st.session_state.grants_db.append({
                         "athlete": player["name"],
                         "tier": selected_grant,
-                        "csr_id": st.session_state.authenticated_csr,
+                        "csr_id": st.session_state.get("authenticated_csr", "CSR_AGENT"),
                     })
                     st.success(f"Grant successfully offered to {player['name']}!")
-
-            with col_det2:
-                st.subheader(f"📹 {player['name']}'s Video Library ({len(vids)} Clips)")
-                render_video_library_player(vids)
 
             return
 
