@@ -4,29 +4,30 @@ import requests
 
 OLLAMA_ENDPOINT = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "qwen2.5:1.5b"
-REQUEST_TIMEOUT = 30.0  # Increased timeout from 8.0s to 30.0s
+REQUEST_TIMEOUT = 120.0
 
 
 def generate_impact_scorecard(player_name: str, level: str, kinematics: dict) -> dict:
-    """Queries local Ollama (Qwen2.5) to evaluate player kinematics and produce AI coaching feedback.
-
-    Falls back smoothly to a rule engine if Ollama is unreachable.
-    """
+    """Queries local Ollama (Qwen2.5) to evaluate player kinematics using a strict, critical coaching persona."""
     elbow = kinematics.get("avg_elbow_angle", 118.5)
     knee = kinematics.get("avg_knee_angle", 138.2)
-    fh = kinematics.get("forehand_score", 80)
-    bh = kinematics.get("backhand_score", 78)
-    fw = kinematics.get("footwork_score", 80)
+    fh = kinematics.get("forehand_score", 62)
+    bh = kinematics.get("backhand_score", 58)
+    fw = kinematics.get("footwork_score", 60)
 
-    prompt = f"""You are an elite sports biomechanics AI coach analyzing a table tennis athlete.
-    Player Name: {player_name}
-    Claimed Level: {level}
-    Biomechanical Telemetry:
-    - Average Elbow Stroke Angle: {elbow}° (Optimal range: 115° - 125°)
-    - Average Ready Stance Knee Flex: {knee}° (Optimal range: 130° - 142°)
-    - Mechanics Scores: Forehand ({fh}/100), Backhand ({bh}/100), Footwork ({fw}/100)
+    prompt = f"""You are an uncompromising National-Level Table Tennis Head Coach.
+    Your job is to provide a rigorous, critical biomechanical critique. Do NOT use soft compliments, filler, or generic praise.
+    Scores above 80 are strictly reserved for elite national athletes.
 
-    Provide a concise 3-sentence technical coaching assessment. Highlight one major strength in stroke form and one practical training exercise to improve footwork or stance recovery.
+    Athlete Details:
+    - Player Name: {player_name}
+    - Claimed Level: {level}
+    - Telemetry:
+      * Elbow Stroke Angle: {elbow}° (Optimal: 115° - 125°)
+      * Knee Flex Angle: {knee}° (Optimal: 130° - 142°)
+      * Scores: Forehand ({fh}/100), Backhand ({bh}/100), Footwork ({fw}/100)
+
+    Provide a concise 3-sentence technical evaluation. Identify at least TWO specific mechanical flaws or form breakdowns in stroke recovery or footwork, and specify one targeted corrective drill to fix them.
     """
 
     payload = {
@@ -34,7 +35,7 @@ def generate_impact_scorecard(player_name: str, level: str, kinematics: dict) ->
         "prompt": prompt,
         "stream": False,
         "options": {
-            "temperature": 0.3,
+            "temperature": 0.1,  # Low temperature forces strict adherence to prompt constraints
             "num_predict": 200
         }
     }
@@ -61,20 +62,19 @@ def generate_impact_scorecard(player_name: str, level: str, kinematics: dict) ->
 
 
 def _get_rule_fallback_evaluation(player_name: str, level: str, kinematics: dict) -> dict:
-    """Generates structured fallback commentary using algorithmic heuristic rules."""
+    """Generates structured fallback commentary using strict algorithmic heuristics."""
     elbow = kinematics.get("avg_elbow_angle", 118.5)
     knee = kinematics.get("avg_knee_angle", 138.2)
-    fh = kinematics.get("forehand_score", 80)
-    fw = kinematics.get("footwork_score", 80)
+    fh = kinematics.get("forehand_score", 62)
+    fw = kinematics.get("footwork_score", 60)
 
-    # Technique checks
-    elbow_status = "optimal extension" if 110 <= elbow <= 130 else "excessive arm tension"
-    knee_status = "excellent center of gravity" if 128 <= knee <= 145 else "high athletic stance"
+    elbow_status = "acceptable elbow extension" if 115 <= elbow <= 125 else "mechanical inefficiency in arm drive"
+    knee_status = "adequate low center of gravity" if 130 <= knee <= 142 else "excessively upright posture delaying lateral push-off"
 
     summary = (
-        f"{player_name} demonstrates solid execution at the {level} level with a forehand score of {fh}/100. "
-        f"Kinematic tracking shows an average elbow flex of {elbow}°, indicating {elbow_status} during drive phases. "
-        f"To improve stance transitions, work on multi-directional footwork ladder drills to optimize the {knee}° knee flex posture."
+        f"{player_name} demonstrates technical flaws for the {level} tier, scoring {fh}/100 on forehand execution. "
+        f"Kinematic telemetry reveals {elbow_status} ({elbow}°) and {knee_status} ({knee}°). "
+        f"Immediate correction requires shadow multi-ball drills and dynamic stance recovery exercises to lower center of gravity."
     )
 
     return {

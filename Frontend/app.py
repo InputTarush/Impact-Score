@@ -1702,6 +1702,7 @@ elif st.session_state.selected_role == "applicant":
                                 st.session_state.users_db[current_user_id]["saved_video_paths"] = saved_paths
                                 st.session_state.users_db[current_user_id]["analysis_completed"] = True
                                 st.session_state.users_db[current_user_id]["ai_commentary"] = llm_commentary
+                                st.session_state.users_db[current_user_id]["kinematics"] = kinematics
 
                                 my_bar.progress(100, text="Analysis Complete!")
                                 st.session_state.just_passed_video_eval = True
@@ -1718,6 +1719,56 @@ elif st.session_state.selected_role == "applicant":
                             )
                         except Exception as e:
                             st.error(f"An unexpected error occurred during evaluation: {e}")
+            user_data = st.session_state.users_db.get(current_user_id, {})
+            
+            if user_data.get("analysis_completed"):
+                ai_commentary = user_data.get("ai_commentary", "")
+                kinematics = user_data.get("kinematics", {})
+                overall_score = user_data.get("overall", 0)
+
+                st.markdown("---")
+                st.subheader("🧠 AI Biomechanical Analysis & Coaching Report")
+
+                # Overall Score Display
+                st.metric(
+                    label="🎯 Overall Impact Score", 
+                    value=f"{overall_score} / 100", 
+                    delta="Verified by Vision Engine & Ollama Qwen"
+                )
+
+                # Qwen LLM Coaching Text Callout
+                if ai_commentary:
+                    st.info(
+                        f"**📋 AI Coach Commentary:**\n\n{ai_commentary}", 
+                        icon="🏓"
+                    )
+
+                # Vision Engine Kinematics Grid
+                if kinematics:
+                    st.markdown("#### 📈 Key Biomechanical Telemetry")
+                    m_col1, m_col2, m_col3 = st.columns(3)
+                    
+                    with m_col1:
+                        st.metric(
+                            label="Avg Elbow Angle", 
+                            value=f"{kinematics.get('avg_elbow_angle', 'N/A')}°",
+                            help="Optimal Range: 115° - 125°"
+                        )
+                    with m_col2:
+                        st.metric(
+                            label="Avg Knee Flex", 
+                            value=f"{kinematics.get('avg_knee_angle', 'N/A')}°",
+                            help="Optimal Range: 130° - 142°"
+                        )
+                    with m_col3:
+                        st.metric(
+                            label="Frames Analyzed", 
+                            value=f"{kinematics.get('processed_frames', 0)}"
+                        )
+
+                    # Expandable Raw Kinematic Output
+                    with st.expander("🔍 View Raw Vision Engine Metrics"):
+                        st.json(kinematics)
 
         # TAB 4: VIDEO LIBRARY
         elif athlete_view == "📹 Video Library":
